@@ -89,11 +89,7 @@
     font-size: 13px;
     font-weight: 500;
     border: 1px solid transparent;
-    background-image: repeating-linear-gradient(to bottom, transparent 0 5px, rgba(255,255,255,0.06) 5px 6px);
-    background-size: 100% 11px;
-    background-position: left;
-    background-repeat: no-repeat;
-    background-size: 3px 100%;
+    background-color: transparent;
   }
   .nav-stub .dot {
     width: 8px; height: 8px;
@@ -121,18 +117,38 @@
     margin: 10px 4px;
   }
 
+  /* ---------- lang switcher ---------- */
+  .lang-switch {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .lang-btn {
+    background: none;
+    border: 1px solid var(--rail);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .lang-btn.active { background: var(--scheduling); color: var(--ink); border-color: var(--scheduling); }
+
   /* ---------- main ---------- */
   #main { flex: 1; min-width: 0; }
   #topbar {
     border-bottom: 1px solid var(--rail);
     padding: 16px 28px;
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
   }
   #topbar h1 { font-size: 19px; margin: 0; text-transform: uppercase; letter-spacing: 0.02em; font-weight: 600; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
   .demo-badge {
     font-size: 10px;
     text-transform: uppercase;
@@ -141,6 +157,7 @@
     border: 1px solid var(--rail);
     padding: 4px 9px;
     border-radius: 20px;
+    white-space: nowrap;
   }
   #content { padding: 26px 28px 60px; max-width: 980px; }
   .module-panel { display: none; }
@@ -187,7 +204,7 @@
   .stub .meta { font-size: 11.5px; opacity: 0.65; margin-bottom: 8px; }
   .stub .body-text { font-size: 13.5px; line-height: 1.5; }
   .stub .stub-actions {
-    display: flex; gap: 8px;
+    display: flex; gap: 8px; flex-wrap: wrap;
     margin-top: 12px;
     padding-top: 10px;
     border-top: 1px dashed rgba(35,38,31,0.25);
@@ -248,16 +265,6 @@
     background: var(--accent);
     opacity: 0.35;
     flex-shrink: 0;
-  }
-  .stage-pill {
-    display: inline-block;
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 8px;
-    border-radius: 20px;
-    background: rgba(35,38,31,0.1);
-    font-weight: 600;
   }
 
   /* payroll table-ish */
@@ -367,6 +374,8 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
   }
   .portfolio-eyebrow { color: var(--text-dim); font-size: 12px; font-weight: 600; margin-bottom: 4px; }
   #portfolioTopbar h1 { font-size: 26px; margin: 0; text-transform: none; }
@@ -436,10 +445,13 @@
 <div id="portfolioView">
   <div id="portfolioTopbar">
     <div>
-      <div class="portfolio-eyebrow">Your restaurants</div>
-      <h1>Good morning</h1>
+      <div class="portfolio-eyebrow" id="portfolioEyebrow">Your restaurants</div>
+      <h1 id="portfolioGreeting">Good morning</h1>
     </div>
-    <span class="demo-badge">Sample data · demo</span>
+    <div class="topbar-right">
+      <div class="lang-switch" id="langSwitchPortfolio"></div>
+      <span class="demo-badge" id="demoBadgePortfolio">Sample data · demo</span>
+    </div>
   </div>
   <div id="portfolioContent"></div>
 </div>
@@ -452,84 +464,362 @@
         <button id="backToPortfolio" onclick="showPortfolio()">← All restaurants</button>
         <h1 id="topbarTitle">Overview</h1>
       </div>
-      <span class="demo-badge">Sample data · demo</span>
+      <div class="topbar-right">
+        <div class="lang-switch" id="langSwitchApp"></div>
+        <span class="demo-badge" id="demoBadgeApp">Sample data · demo</span>
+      </div>
     </div>
     <div id="content"></div>
   </div>
 </div>
 
 <script>
+/* ============================== i18n ============================== */
+let LANG = "en";
+const LANGS = [
+  { code: "en", label: "EN" },
+  { code: "fr", label: "FR" },
+  { code: "es", label: "ES" },
+];
+
+const ROLE_LABELS = {
+  lineCook: { en: "Line Cook", fr: "Cuisinier de ligne", es: "Cocinero de línea" },
+  server: { en: "Server", fr: "Serveur/Serveuse", es: "Mesero/a" },
+  host: { en: "Host", fr: "Hôte/Hôtesse", es: "Anfitrión/a" },
+  bartender: { en: "Bartender", fr: "Barman/Barmaid", es: "Bartender" },
+  dishwasher: { en: "Dishwasher", fr: "Plongeur/Plongeuse", es: "Lavaplatos" },
+};
+function roleLabel(key) { return (ROLE_LABELS[key] && ROLE_LABELS[key][LANG]) || key; }
+
+const TYPE_LABELS = {
+  manual: { en: "Manual", fr: "Manuel", es: "Manual" },
+  contract: { en: "Contract", fr: "Contrat", es: "Contrato" },
+};
+function typeLabel(key) { return (TYPE_LABELS[key] && TYPE_LABELS[key][LANG]) || key; }
+
+const T = {
+  en: {
+    demoBadge: "Sample data · demo",
+    back: "← All restaurants",
+    nav: { overview: "Overview", hiring: "Hiring", training: "Training", scheduling: "Scheduling", payroll: "Payroll & Sales", comms: "Communications" },
+    days: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
+    portfolio: {
+      eyebrow: "Your restaurants", greeting: "Good morning",
+      totalSales: "Combined sales this week", totalOpen: "Open shifts across locations", totalAttention: "Locations needing attention",
+      salesThisWeek: "Sales this week", laborCost: "Labor cost", openShifts: "Open shifts",
+      statusOk: "On track", statusAttention: "Attention",
+    },
+    overview: {
+      eyebrow: "Overview", h2: "This week, at a glance", p: "Every module below feeds this dashboard — tap a card to open it.",
+      openApplications: "Open applications", totalPipeline: n => `${n} total in pipeline`,
+      coursesInProgress: "Courses in progress", coursesDocs: (c,d) => `${c} courses · ${d} documents`,
+      openShifts: "Open shifts", aiFlag: "AI flagged Saturday as short-staffed",
+      salesWeek: "Sales this week", laborPct: p => `${p}% labor cost`,
+      unread: "Unread messages", askAnything: "Ask the AI agent anything",
+    },
+    hiring: {
+      eyebrow: "Hiring", h2: "Applicant pipeline",
+      p: "Post an opening, let the system screen resumes against the role, then schedule interviews without leaving the pipeline.",
+      postJob: "Post a job opening",
+      applyingFor: (role, applied) => `Applying for ${role} · applied ${applied}`,
+      screeningMatch: score => `Screening match: ${score}/100 — resume and experience checked against this role's requirements.`,
+      interviewLabel: when => `Interview: ${when}`,
+      scheduleInterview: "Schedule interview", viewInterview: "View interview", viewApplication: "View application",
+      stage: { applied: "Applied", screening: "Screening", interview: "Interview scheduled", offer: "Offer sent" },
+    },
+    training: {
+      eyebrow: "Training", h2: "Onboarding & courses",
+      p: "Video courses, onboarding manuals, and contracts to sign — all in one place, with completion tracked per person.",
+      createCourse: "Create a course",
+      doneCount: (c,a) => `${c}/${a} done`,
+      minAssigned: (m,a) => `${m} min · assigned to ${a} staff`,
+      manualsHeader: "Manuals & contracts",
+    },
+    scheduling: {
+      eyebrow: "Scheduling", h2: "Shifts & staffing",
+      p: "An agent watches your sales history and nearby events to flag staffing gaps before they happen — and when someone doesn't show, posting a replacement here texts every matching staff member in seconds.",
+      aiForecastTag: "AI forecast", suggestionLabel: "Suggestion:", addShift: "Add the shift",
+      postShift: "Post an open shift", open: "Open", filled: "Filled",
+      respondedCount: n => `${n} staff responded`,
+    },
+    payroll: {
+      eyebrow: "Payroll & Sales", h2: "This week's numbers",
+      p: "Real-time labor, food, and beverage cost against sales — plus payroll that's already forecasted for next period.",
+      liveTag: "Live", salesLine: (total, labor) => `$${total} total · ${labor}% labor cost`,
+      pnlTag: "P&L snapshot", costBreakdown: "Cost breakdown", pctOfSales: "Percent of this week's sales",
+      foodCost: "Food cost", bevCost: "Beverage cost", laborCost: "Labor cost", netMargin: "Net margin",
+      forecastTag: "Forecast", nextPeriod: "Next pay period estimate",
+      hoursTag: "Hours", staffPayHeader: "Staff pay this week", hoursBasis: "Based on logged hours × hourly rate",
+    },
+    comms: {
+      eyebrow: "Communications", h2: "Team messages & AI agent",
+      p: "One inbox for your team, plus an agent that can see across hiring, training, scheduling, and payroll to actually answer questions — not just relay messages.",
+      aiTag: "AI agent", askHeader: "Ask about your restaurant",
+      inputPlaceholder: "e.g. Which shift is understaffed this week?", ask: "Ask",
+      threadTag: "Thread", threadHeader: "Shift swap — this week",
+      newTag: "New", broadcastHeader: "Broadcast an announcement",
+      broadcastPlaceholder: "e.g. Kitchen closes early this Sunday for inventory — plan accordingly.",
+      sendAll: "Send to all staff", you: "You",
+      respCost: p => `This week: food cost ${p.foodCostPct}%, beverage cost ${p.bevCostPct}%, labor cost ${p.laborCostPct}% — net margin around ${p.netMarginPct}%. Labor's the largest lever right now.`,
+      respTrainingBehind: list => `Still catching up on: ${list}.`,
+      respTrainingCaughtUp: "Everyone's caught up on assigned courses.",
+      respTrainingContract: "One contract is still waiting on a signature in Training.",
+      respHiring: open => `${open} candidates are still active in the pipeline. Dana Okafor's offer is out for ${roleLabel("host")}, and Priya Nandan has an interview scheduled for ${roleLabel("lineCook")}.`,
+      respFallback: "I can pull from hiring, training, scheduling, and payroll to answer that — try asking about staffing, labor cost, or who's behind on training.",
+    },
+    alerts: {
+      postJob: "In the full product, this opens a job-post form.",
+      viewApp: "Would open their full application.",
+      scheduleInterview: "Would open a scheduling picker synced to your calendar.",
+      viewInterview: "Would open the interview details.",
+      createCourse: "In the full product, this opens a course builder.",
+      postShiftLive: "This is the live product you already have — posting here sends real SMS.",
+      addShift: "Would pre-fill an open shift matching this suggestion.",
+      broadcast: "Would text every staff member this announcement.",
+    },
+  },
+  fr: {
+    demoBadge: "Données d'exemple · démo",
+    back: "← Tous les restaurants",
+    nav: { overview: "Aperçu", hiring: "Embauche", training: "Formation", scheduling: "Horaire", payroll: "Paie & Ventes", comms: "Communications" },
+    days: ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"],
+    portfolio: {
+      eyebrow: "Vos restaurants", greeting: "Bonjour",
+      totalSales: "Ventes combinées cette semaine", totalOpen: "Quarts ouverts, tous emplacements", totalAttention: "Emplacements à surveiller",
+      salesThisWeek: "Ventes cette semaine", laborCost: "Coût de main-d'œuvre", openShifts: "Quarts ouverts",
+      statusOk: "Sur la bonne voie", statusAttention: "À surveiller",
+    },
+    overview: {
+      eyebrow: "Aperçu", h2: "Cette semaine, en un coup d'œil", p: "Chaque module ci-dessous alimente ce tableau de bord — touchez une carte pour l'ouvrir.",
+      openApplications: "Candidatures ouvertes", totalPipeline: n => `${n} au total dans le pipeline`,
+      coursesInProgress: "Cours en cours", coursesDocs: (c,d) => `${c} cours · ${d} documents`,
+      openShifts: "Quarts ouverts", aiFlag: "L'IA a signalé samedi comme sous-effectif",
+      salesWeek: "Ventes cette semaine", laborPct: p => `${p}% coût de main-d'œuvre`,
+      unread: "Messages non lus", askAnything: "Posez une question à l'agent IA",
+    },
+    hiring: {
+      eyebrow: "Embauche", h2: "Pipeline de candidatures",
+      p: "Publiez un poste, laissez le système présélectionner les CV selon le poste, puis planifiez les entrevues sans quitter le pipeline.",
+      postJob: "Publier un poste",
+      applyingFor: (role, applied) => `Candidature pour ${role} · postulé ${applied}`,
+      screeningMatch: score => `Correspondance : ${score}/100 — CV et expérience comparés aux exigences du poste.`,
+      interviewLabel: when => `Entrevue : ${when}`,
+      scheduleInterview: "Planifier l'entrevue", viewInterview: "Voir l'entrevue", viewApplication: "Voir la candidature",
+      stage: { applied: "Reçue", screening: "Présélection", interview: "Entrevue planifiée", offer: "Offre envoyée" },
+    },
+    training: {
+      eyebrow: "Formation", h2: "Intégration et cours",
+      p: "Cours vidéo, guides d'intégration et contrats à signer — tout au même endroit, avec le suivi d'achèvement par personne.",
+      createCourse: "Créer un cours",
+      doneCount: (c,a) => `${c}/${a} terminés`,
+      minAssigned: (m,a) => `${m} min · assigné à ${a} employés`,
+      manualsHeader: "Guides et contrats",
+    },
+    scheduling: {
+      eyebrow: "Horaire", h2: "Quarts et personnel",
+      p: "Un agent surveille votre historique de ventes et les événements à proximité pour signaler les manques de personnel à l'avance — et quand quelqu'un ne se présente pas, publier un remplacement ici envoie un vrai texto à tout le personnel concerné en quelques secondes.",
+      aiForecastTag: "Prévision IA", suggestionLabel: "Suggestion :", addShift: "Ajouter le quart",
+      postShift: "Publier un quart ouvert", open: "Ouvert", filled: "Comblé",
+      respondedCount: n => `${n} employés ont répondu`,
+    },
+    payroll: {
+      eyebrow: "Paie & Ventes", h2: "Les chiffres de la semaine",
+      p: "Coûts de main-d'œuvre, de nourriture et de boissons en temps réel par rapport aux ventes — plus une paie déjà prévue pour la prochaine période.",
+      liveTag: "En direct", salesLine: (total, labor) => `${total} $ au total · ${labor}% coût de main-d'œuvre`,
+      pnlTag: "Aperçu du bilan", costBreakdown: "Répartition des coûts", pctOfSales: "Pourcentage des ventes de la semaine",
+      foodCost: "Coût de la nourriture", bevCost: "Coût des boissons", laborCost: "Coût de main-d'œuvre", netMargin: "Marge nette",
+      forecastTag: "Prévision", nextPeriod: "Estimation de la prochaine paie",
+      hoursTag: "Heures", staffPayHeader: "Paie du personnel cette semaine", hoursBasis: "Basé sur les heures enregistrées × taux horaire",
+    },
+    comms: {
+      eyebrow: "Communications", h2: "Messages d'équipe & agent IA",
+      p: "Une seule boîte de réception pour votre équipe, plus un agent qui voit l'embauche, la formation, l'horaire et la paie pour vraiment répondre à vos questions — pas seulement relayer des messages.",
+      aiTag: "Agent IA", askHeader: "Posez une question sur votre restaurant",
+      inputPlaceholder: "ex. Quel quart manque de personnel cette semaine ?", ask: "Demander",
+      threadTag: "Fil", threadHeader: "Échange de quart — cette semaine",
+      newTag: "Nouveau", broadcastHeader: "Diffuser une annonce",
+      broadcastPlaceholder: "ex. La cuisine ferme plus tôt dimanche pour l'inventaire — prévoyez en conséquence.",
+      sendAll: "Envoyer à tout le personnel", you: "Vous",
+      respCost: p => `Cette semaine : coût de la nourriture ${p.foodCostPct}%, coût des boissons ${p.bevCostPct}%, coût de main-d'œuvre ${p.laborCostPct}% — marge nette d'environ ${p.netMarginPct}%. La main-d'œuvre est le principal levier en ce moment.`,
+      respTrainingBehind: list => `Encore en retard sur : ${list}.`,
+      respTrainingCaughtUp: "Tout le monde est à jour sur les cours assignés.",
+      respTrainingContract: "Un contrat est encore en attente de signature dans Formation.",
+      respHiring: open => `${open} candidats sont encore actifs dans le pipeline. L'offre de Dana Okafor est envoyée pour ${roleLabel("host")}, et Priya Nandan a une entrevue prévue pour ${roleLabel("lineCook")}.`,
+      respFallback: "Je peux puiser dans l'embauche, la formation, l'horaire et la paie pour répondre à ça — essayez de demander à propos du personnel, du coût de main-d'œuvre, ou de qui a du retard en formation.",
+    },
+    alerts: {
+      postJob: "Dans le produit complet, ceci ouvrirait un formulaire d'affichage de poste.",
+      viewApp: "Ouvrirait la candidature complète.",
+      scheduleInterview: "Ouvrirait un sélecteur de rendez-vous synchronisé à votre calendrier.",
+      viewInterview: "Ouvrirait les détails de l'entrevue.",
+      createCourse: "Dans le produit complet, ceci ouvrirait un créateur de cours.",
+      postShiftLive: "Ceci est le produit réel que vous avez déjà — publier ici envoie un vrai texto.",
+      addShift: "Pré-remplirait un quart ouvert correspondant à cette suggestion.",
+      broadcast: "Enverrait un texto à tout le personnel avec cette annonce.",
+    },
+  },
+  es: {
+    demoBadge: "Datos de muestra · demo",
+    back: "← Todos los restaurantes",
+    nav: { overview: "Resumen", hiring: "Contratación", training: "Capacitación", scheduling: "Horario", payroll: "Nómina y Ventas", comms: "Comunicaciones" },
+    days: ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"],
+    portfolio: {
+      eyebrow: "Tus restaurantes", greeting: "Buenos días",
+      totalSales: "Ventas combinadas esta semana", totalOpen: "Turnos abiertos en todas las ubicaciones", totalAttention: "Ubicaciones que necesitan atención",
+      salesThisWeek: "Ventas esta semana", laborCost: "Costo de mano de obra", openShifts: "Turnos abiertos",
+      statusOk: "En buen camino", statusAttention: "Atención",
+    },
+    overview: {
+      eyebrow: "Resumen", h2: "Esta semana, de un vistazo", p: "Cada módulo abajo alimenta este panel — toca una tarjeta para abrirla.",
+      openApplications: "Solicitudes abiertas", totalPipeline: n => `${n} en total en el proceso`,
+      coursesInProgress: "Cursos en progreso", coursesDocs: (c,d) => `${c} cursos · ${d} documentos`,
+      openShifts: "Turnos abiertos", aiFlag: "La IA marcó el sábado con poco personal",
+      salesWeek: "Ventas esta semana", laborPct: p => `${p}% costo de mano de obra`,
+      unread: "Mensajes no leídos", askAnything: "Pregúntale al agente de IA",
+    },
+    hiring: {
+      eyebrow: "Contratación", h2: "Proceso de candidatos",
+      p: "Publica una vacante, deja que el sistema filtre currículums según el puesto, y agenda entrevistas sin salir del proceso.",
+      postJob: "Publicar una vacante",
+      applyingFor: (role, applied) => `Solicitando para ${role} · aplicó ${applied}`,
+      screeningMatch: score => `Coincidencia de filtro: ${score}/100 — currículum y experiencia comparados con los requisitos del puesto.`,
+      interviewLabel: when => `Entrevista: ${when}`,
+      scheduleInterview: "Agendar entrevista", viewInterview: "Ver entrevista", viewApplication: "Ver solicitud",
+      stage: { applied: "Recibida", screening: "Filtro", interview: "Entrevista agendada", offer: "Oferta enviada" },
+    },
+    training: {
+      eyebrow: "Capacitación", h2: "Incorporación y cursos",
+      p: "Cursos en video, manuales de incorporación y contratos por firmar — todo en un solo lugar, con el progreso registrado por persona.",
+      createCourse: "Crear un curso",
+      doneCount: (c,a) => `${c}/${a} completado`,
+      minAssigned: (m,a) => `${m} min · asignado a ${a} empleados`,
+      manualsHeader: "Manuales y contratos",
+    },
+    scheduling: {
+      eyebrow: "Horario", h2: "Turnos y personal",
+      p: "Un agente observa tu historial de ventas y eventos cercanos para detectar faltantes de personal antes de que ocurran — y cuando alguien no se presenta, publicar un reemplazo aquí envía un mensaje de texto real a todo el personal indicado en segundos.",
+      aiForecastTag: "Pronóstico IA", suggestionLabel: "Sugerencia:", addShift: "Agregar el turno",
+      postShift: "Publicar un turno abierto", open: "Abierto", filled: "Cubierto",
+      respondedCount: n => `${n} empleados respondieron`,
+    },
+    payroll: {
+      eyebrow: "Nómina y Ventas", h2: "Los números de esta semana",
+      p: "Costo de mano de obra, comida y bebida en tiempo real frente a las ventas — además de una nómina ya pronosticada para el próximo período.",
+      liveTag: "En vivo", salesLine: (total, labor) => `$${total} total · ${labor}% costo de mano de obra`,
+      pnlTag: "Resumen financiero", costBreakdown: "Desglose de costos", pctOfSales: "Porcentaje de las ventas de esta semana",
+      foodCost: "Costo de comida", bevCost: "Costo de bebidas", laborCost: "Costo de mano de obra", netMargin: "Margen neto",
+      forecastTag: "Pronóstico", nextPeriod: "Estimado del próximo período de pago",
+      hoursTag: "Horas", staffPayHeader: "Pago del personal esta semana", hoursBasis: "Basado en horas registradas × tarifa por hora",
+    },
+    comms: {
+      eyebrow: "Comunicaciones", h2: "Mensajes del equipo y agente IA",
+      p: "Una sola bandeja de entrada para tu equipo, más un agente que puede ver contratación, capacitación, horario y nómina para realmente responder preguntas — no solo transmitir mensajes.",
+      aiTag: "Agente IA", askHeader: "Pregunta sobre tu restaurante",
+      inputPlaceholder: "ej. ¿Qué turno tiene poco personal esta semana?", ask: "Preguntar",
+      threadTag: "Hilo", threadHeader: "Intercambio de turno — esta semana",
+      newTag: "Nuevo", broadcastHeader: "Enviar un anuncio",
+      broadcastPlaceholder: "ej. La cocina cierra temprano este domingo por inventario — planifica en consecuencia.",
+      sendAll: "Enviar a todo el personal", you: "Tú",
+      respCost: p => `Esta semana: costo de comida ${p.foodCostPct}%, costo de bebidas ${p.bevCostPct}%, costo de mano de obra ${p.laborCostPct}% — margen neto de alrededor del ${p.netMarginPct}%. La mano de obra es la mayor palanca en este momento.`,
+      respTrainingBehind: list => `Todavía atrasados en: ${list}.`,
+      respTrainingCaughtUp: "Todos están al día con los cursos asignados.",
+      respTrainingContract: "Un contrato todavía espera firma en Capacitación.",
+      respHiring: open => `${open} candidatos siguen activos en el proceso. La oferta de Dana Okafor salió para ${roleLabel("host")}, y Priya Nandan tiene una entrevista agendada para ${roleLabel("lineCook")}.`,
+      respFallback: "Puedo consultar contratación, capacitación, horario y nómina para responder eso — intenta preguntar sobre personal, costo de mano de obra, o quién va atrasado en capacitación.",
+    },
+    alerts: {
+      postJob: "En el producto completo, esto abriría un formulario de publicación de vacante.",
+      viewApp: "Abriría la solicitud completa.",
+      scheduleInterview: "Abriría un selector de horario sincronizado con tu calendario.",
+      viewInterview: "Abriría los detalles de la entrevista.",
+      createCourse: "En el producto completo, esto abriría un creador de cursos.",
+      postShiftLive: "Este es el producto real que ya tienes — publicar aquí envía un SMS real.",
+      addShift: "Prellenaría un turno abierto según esta sugerencia.",
+      broadcast: "Enviaría un mensaje de texto a todo el personal con este anuncio.",
+    },
+  },
+};
+function t(path, ...args) {
+  const parts = path.split(".");
+  let node = T[LANG];
+  for (const p of parts) node = node && node[p];
+  if (typeof node === "function") return node(...args);
+  return node != null ? node : path;
+}
+function tf(obj) { return obj ? (obj[LANG] || obj.en) : ""; }
+
+/* ============================== data ============================== */
 const RESTAURANTS = [
-  { id: "pigeon-old-montreal", name: "Pigeon Cafe Old Montreal", city: "Old Montreal", weekSales: 18420, laborPct: 29, openShifts: 2, status: "attention", note: "AI flagged Saturday lunch as short-staffed." },
-  { id: "pigeon-downtown", name: "Pigeon Cafe Downtown", city: "Downtown Montreal", weekSales: 24110, laborPct: 24, openShifts: 0, status: "ok", note: "Fully staffed, on target for the week." },
-  { id: "tzatziqui", name: "Tzatzi-qui", city: "Montreal", weekSales: 14870, laborPct: 34, openShifts: 3, status: "attention", note: "Labor cost is running high for sales volume." },
-  { id: "souvlaki-laval", name: "Souvlaki Bar Laval", city: "Laval", weekSales: 21200, laborPct: 26, openShifts: 1, status: "ok", note: "One open shift, already has 2 responses." },
-  { id: "shay", name: "Shay", city: "Montreal", weekSales: 16340, laborPct: 27, openShifts: 0, status: "ok", note: "Fully staffed, on target for the week." },
-  { id: "sergiolino", name: "SergioLino", city: "Montreal", weekSales: 12980, laborPct: 31, openShifts: 2, status: "attention", note: "Two open shifts posted less than an hour ago." },
+  { id: "pigeon-old-montreal", name: "Pigeon Cafe Old Montreal", city: { en:"Old Montreal", fr:"Vieux-Montréal", es:"Old Montreal" }, weekSales: 18420, laborPct: 29, openShifts: 2, status: "attention", note: { en:"AI flagged Saturday lunch as short-staffed.", fr:"L'IA a signalé un manque de personnel samedi midi.", es:"La IA detectó falta de personal el sábado a la hora de almuerzo." } },
+  { id: "pigeon-downtown", name: "Pigeon Cafe Downtown", city: { en:"Downtown Montreal", fr:"Centre-ville de Montréal", es:"Downtown Montreal" }, weekSales: 24110, laborPct: 24, openShifts: 0, status: "ok", note: { en:"Fully staffed, on target for the week.", fr:"Personnel complet, objectifs atteints pour la semaine.", es:"Personal completo, en meta para la semana." } },
+  { id: "tzatziqui", name: "Tzatzi-qui", city: { en:"Montreal", fr:"Montréal", es:"Montreal" }, weekSales: 14870, laborPct: 34, openShifts: 3, status: "attention", note: { en:"Labor cost is running high for sales volume.", fr:"Le coût de main-d'œuvre est élevé par rapport aux ventes.", es:"El costo de mano de obra está alto para el volumen de ventas." } },
+  { id: "souvlaki-laval", name: "Souvlaki Bar Laval", city: { en:"Laval", fr:"Laval", es:"Laval" }, weekSales: 21200, laborPct: 26, openShifts: 1, status: "ok", note: { en:"One open shift, already has 2 responses.", fr:"Un quart ouvert, déjà 2 réponses.", es:"Un turno abierto, ya tiene 2 respuestas." } },
+  { id: "shay", name: "Shay", city: { en:"Montreal", fr:"Montréal", es:"Montreal" }, weekSales: 16340, laborPct: 27, openShifts: 0, status: "ok", note: { en:"Fully staffed, on target for the week.", fr:"Personnel complet, objectifs atteints pour la semaine.", es:"Personal completo, en meta para la semana." } },
+  { id: "sergiolino", name: "SergioLino", city: { en:"Montreal", fr:"Montréal", es:"Montreal" }, weekSales: 12980, laborPct: 31, openShifts: 2, status: "attention", note: { en:"Two open shifts posted less than an hour ago.", fr:"Deux quarts ouverts publiés il y a moins d'une heure.", es:"Dos turnos abiertos publicados hace menos de una hora." } },
 ];
 
 const MODULES = [
-  { id: "overview", label: "Overview", color: null },
-  { id: "hiring", label: "Hiring", color: "var(--hiring)" },
-  { id: "training", label: "Training", color: "var(--training)" },
-  { id: "scheduling", label: "Scheduling", color: "var(--scheduling)" },
-  { id: "payroll", label: "Payroll & Sales", color: "var(--payroll)" },
-  { id: "comms", label: "Communications", color: "var(--comms)" },
+  { id: "overview", color: null },
+  { id: "hiring", color: "var(--hiring)" },
+  { id: "training", color: "var(--training)" },
+  { id: "scheduling", color: "var(--scheduling)" },
+  { id: "payroll", color: "var(--payroll)" },
+  { id: "comms", color: "var(--comms)" },
 ];
 
 const DATA = {
   hiring: [
-    { name: "Priya Nandan", role: "Line Cook", stage: "Interview scheduled", applied: "2 days ago", note: "3 yrs experience, available weekends", aiScore: 88, interview: "Thu 2:00 PM" },
-    { name: "Marcus Webb", role: "Server", stage: "Screening", applied: "6 hours ago", note: "Referred by Alex R.", aiScore: 74, interview: null },
-    { name: "Dana Okafor", role: "Host", stage: "Offer sent", applied: "5 days ago", note: "Start date flexible", aiScore: 91, interview: "Completed" },
-    { name: "Theo Marchetti", role: "Bartender", stage: "Applied", applied: "1 day ago", note: "Portfolio of cocktail menus attached", aiScore: null, interview: null },
+    { name: "Priya Nandan", roleKey: "lineCook", stageKey: "interview", applied: { en:"2 days ago", fr:"il y a 2 jours", es:"hace 2 días" }, note: { en:"3 yrs experience, available weekends", fr:"3 ans d'expérience, disponible les fins de semaine", es:"3 años de experiencia, disponible los fines de semana" }, aiScore: 88, interview: { en:"Thu 2:00 PM", fr:"Jeu. 14 h", es:"Jue. 2:00 PM" } },
+    { name: "Marcus Webb", roleKey: "server", stageKey: "screening", applied: { en:"6 hours ago", fr:"il y a 6 heures", es:"hace 6 horas" }, note: { en:"Referred by Alex R.", fr:"Référé par Alex R.", es:"Referido por Alex R." }, aiScore: 74, interview: null },
+    { name: "Dana Okafor", roleKey: "host", stageKey: "offer", applied: { en:"5 days ago", fr:"il y a 5 jours", es:"hace 5 días" }, note: { en:"Start date flexible", fr:"Date de début flexible", es:"Fecha de inicio flexible" }, aiScore: 91, interview: { en:"Completed", fr:"Terminée", es:"Completada" } },
+    { name: "Theo Marchetti", roleKey: "bartender", stageKey: "applied", applied: { en:"1 day ago", fr:"il y a 1 jour", es:"hace 1 día" }, note: { en:"Portfolio of cocktail menus attached", fr:"Portfolio de cartes de cocktails joint", es:"Portafolio de cartas de cócteles adjunto" }, aiScore: null, interview: null },
   ],
   training: {
     courses: [
-      { title: "Onboarding Basics", assigned: 8, completed: 6, minutes: 22 },
-      { title: "Food Safety Certification", assigned: 8, completed: 3, minutes: 45 },
-      { title: "POS System Walkthrough", assigned: 5, completed: 5, minutes: 15 },
-      { title: "Customer De-escalation", assigned: 8, completed: 1, minutes: 18 },
+      { title: { en:"Onboarding Basics", fr:"Bases de l'intégration", es:"Fundamentos de incorporación" }, assigned: 8, completed: 6, minutes: 22 },
+      { title: { en:"Food Safety Certification", fr:"Certification en salubrité alimentaire", es:"Certificación de seguridad alimentaria" }, assigned: 8, completed: 3, minutes: 45 },
+      { title: { en:"POS System Walkthrough", fr:"Présentation du système de caisse", es:"Recorrido del sistema POS" }, assigned: 5, completed: 5, minutes: 15 },
+      { title: { en:"Customer De-escalation", fr:"Désamorcer les conflits avec la clientèle", es:"Manejo de clientes conflictivos" }, assigned: 8, completed: 1, minutes: 18 },
     ],
     documents: [
-      { title: "Employee Handbook 2026", type: "Manual", status: "Acknowledged by 7/8" },
-      { title: "Employment Contract — Priya Nandan", type: "Contract", status: "Signed" },
-      { title: "Employment Contract — Marcus Webb", type: "Contract", status: "Pending signature" },
-      { title: "Health & Safety Policy", type: "Manual", status: "Acknowledged by 8/8" },
+      { title: { en:"Employee Handbook 2026", fr:"Guide de l'employé 2026", es:"Manual del empleado 2026" }, typeKey: "manual", status: { en:"Acknowledged by 7/8", fr:"Confirmé par 7/8", es:"Confirmado por 7/8" } },
+      { title: { en:"Employment Contract — Priya Nandan", fr:"Contrat de travail — Priya Nandan", es:"Contrato de trabajo — Priya Nandan" }, typeKey: "contract", status: { en:"Signed", fr:"Signé", es:"Firmado" } },
+      { title: { en:"Employment Contract — Marcus Webb", fr:"Contrat de travail — Marcus Webb", es:"Contrato de trabajo — Marcus Webb" }, typeKey: "contract", status: { en:"Pending signature", fr:"Signature en attente", es:"Firma pendiente" } },
+      { title: { en:"Health & Safety Policy", fr:"Politique de santé et sécurité", es:"Política de salud y seguridad" }, typeKey: "manual", status: { en:"Acknowledged by 8/8", fr:"Confirmé par 8/8", es:"Confirmado por 8/8" } },
     ],
   },
   scheduling: {
     forecast: {
-      headline: "Saturday lunch may be understaffed",
-      detail: "Last year's Saturday sales rose 22% during the Riverside Farmers Market, two blocks from you. It's back this Saturday, and no extra coverage is scheduled yet.",
-      suggestion: "Add 1 extra server to the 11am–3pm block.",
+      headline: { en:"Saturday lunch may be understaffed", fr:"Le service du samedi midi pourrait manquer de personnel", es:"El almuerzo del sábado podría tener poco personal" },
+      detail: { en:"Last year's Saturday sales rose 22% during the Riverside Farmers Market, two blocks from you. It's back this Saturday, and no extra coverage is scheduled yet.", fr:"L'an dernier, les ventes du samedi ont augmenté de 22 % pendant le marché fermier Riverside, à deux rues d'ici. Il revient ce samedi, et aucun renfort n'est encore prévu.", es:"El año pasado, las ventas del sábado aumentaron un 22% durante el mercado agrícola Riverside, a dos cuadras de aquí. Regresa este sábado y todavía no hay personal adicional programado." },
+      suggestion: { en:"Add 1 extra server to the 11am–3pm block.", fr:"Ajoutez 1 serveur de plus pour le bloc de 11 h à 15 h.", es:"Agrega 1 mesero adicional para el bloque de 11am a 3pm." },
     },
     shifts: [
-      { role: "Server", time: "Today, 5pm–close", note: "Jordan called out sick", responders: 1, status: "open" },
-      { role: "Dishwasher", time: "Tomorrow, 11am–4pm", note: "", responders: 0, status: "open" },
-      { role: "Line Cook", time: "Fri, 4pm–close", note: "Covered by Priya N.", responders: 2, status: "filled" },
+      { roleKey: "server", time: { en:"Today, 5pm–close", fr:"Aujourd'hui, 17 h–fermeture", es:"Hoy, 5pm–cierre" }, note: { en:"Jordan called out sick", fr:"Jordan a appelé pour maladie", es:"Jordan llamó por enfermedad" }, responders: 1, status: "open" },
+      { roleKey: "dishwasher", time: { en:"Tomorrow, 11am–4pm", fr:"Demain, 11 h–16 h", es:"Mañana, 11am–4pm" }, note: null, responders: 0, status: "open" },
+      { roleKey: "lineCook", time: { en:"Fri, 4pm–close", fr:"Ven., 16 h–fermeture", es:"Vie., 4pm–cierre" }, note: { en:"Covered by Priya N.", fr:"Couvert par Priya N.", es:"Cubierto por Priya N." }, responders: 2, status: "filled" },
     ],
   },
   payroll: {
     weekSales: 18420,
     weeklySalesTrend: [11200, 13800, 12100, 15600, 14200, 18420, 9800],
     pnl: { foodCostPct: 31, bevCostPct: 19, laborCostPct: 29, netMarginPct: 21 },
-    forecast: { nextPeriodEstimate: 9800, note: "Based on scheduled hours plus this month's average tenure raises" },
+    forecast: { nextPeriodEstimate: 9800, note: { en:"Based on scheduled hours plus this month's average tenure raises", fr:"Basé sur les heures prévues, plus les augmentations moyennes d'ancienneté de ce mois-ci", es:"Basado en las horas programadas más los aumentos promedio por antigüedad de este mes" } },
     staffPay: [
-      { name: "Priya Nandan", hours: 34, rate: 19, role: "Line Cook" },
-      { name: "Alex Rivera", hours: 28, rate: 17, role: "Server" },
-      { name: "Sam Okafor", hours: 40, rate: 21, role: "Bartender" },
+      { name: "Priya Nandan", hours: 34, rate: 19, roleKey: "lineCook" },
+      { name: "Alex Rivera", hours: 28, rate: 17, roleKey: "server" },
+      { name: "Sam Okafor", hours: 40, rate: 21, roleKey: "bartender" },
     ],
   },
   comms: {
     aiThread: [
-      { role: "user", text: "Which shift is understaffed this week?" },
-      { role: "ai", text: "Saturday lunch (11am–3pm) is short one server. Last year's sales jumped 22% that week from the nearby farmers market, and it's back this Saturday — no extra coverage is scheduled yet. Priya and Sam are both usually free that block." },
+      { role: "user", text: { en:"Which shift is understaffed this week?", fr:"Quel quart manque de personnel cette semaine ?", es:"¿Qué turno tiene poco personal esta semana?" } },
+      { role: "ai", text: { en:"Saturday lunch (11am–3pm) is short one server. Last year's sales jumped 22% that week from the nearby farmers market, and it's back this Saturday — no extra coverage is scheduled yet. Priya and Sam are both usually free that block.", fr:"Le service du samedi midi (11 h–15 h) manque d'un serveur. L'an dernier, les ventes ont bondi de 22 % cette semaine-là à cause du marché fermier voisin, qui revient ce samedi — aucun renfort n'est encore prévu. Priya et Sam sont habituellement libres à ce moment.", es:"El almuerzo del sábado (11am–3pm) tiene un mesero de menos. El año pasado las ventas subieron 22% esa semana por el mercado agrícola cercano, que regresa este sábado — todavía no hay personal adicional programado. Priya y Sam suelen estar libres en ese bloque." } },
     ],
     thread: [
-      { name: "Priya Nandan", text: "Can I swap my Friday shift with someone? Family thing came up.", time: "9:14 AM", mine: false },
-      { name: "You", text: "Sure — I'll post it as an open shift so anyone can pick it up.", time: "9:20 AM", mine: true },
-      { name: "Sam Okafor", text: "I can take Friday if it's still open!", time: "9:31 AM", mine: false },
+      { name: "Priya Nandan", text: { en:"Can I swap my Friday shift with someone? Family thing came up.", fr:"Puis-je échanger mon quart de vendredi avec quelqu'un ? Un imprévu familial est arrivé.", es:"¿Puedo intercambiar mi turno del viernes con alguien? Surgió un asunto familiar." }, time: "9:14 AM", mine: false },
+      { name: "You", text: { en:"Sure — I'll post it as an open shift so anyone can pick it up.", fr:"Bien sûr — je vais le publier comme quart ouvert pour que n'importe qui puisse le prendre.", es:"Claro — lo publicaré como turno abierto para que cualquiera pueda tomarlo." }, time: "9:20 AM", mine: true },
+      { name: "Sam Okafor", text: { en:"I can take Friday if it's still open!", fr:"Je peux prendre vendredi si c'est encore ouvert !", es:"¡Puedo tomar el viernes si todavía está abierto!" }, time: "9:31 AM", mine: false },
     ],
   },
 };
@@ -537,7 +827,27 @@ const DATA = {
 let active = "overview";
 let currentRestaurantName = "Open Shift Rail";
 
+/* ============================== lang switch ============================== */
+function renderLangSwitch(containerId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = LANGS.map(l => `<button class="lang-btn${LANG === l.code ? " active" : ""}" onclick="setLang('${l.code}')">${l.label}</button>`).join("");
+}
+function setLang(code) {
+  LANG = code;
+  renderLangSwitch("langSwitchPortfolio");
+  renderLangSwitch("langSwitchApp");
+  document.getElementById("demoBadgePortfolio").textContent = t("demoBadge");
+  document.getElementById("demoBadgeApp").textContent = t("demoBadge");
+  document.getElementById("portfolioEyebrow").textContent = t("portfolio.eyebrow");
+  document.getElementById("portfolioGreeting").textContent = t("portfolio.greeting");
+  document.getElementById("backToPortfolio").textContent = t("back");
+  renderPortfolio();
+  renderSidebar();
+  document.getElementById("topbarTitle").textContent = t("nav." + active);
+  renderAll();
+}
 
+/* ============================== sidebar / nav ============================== */
 function renderSidebar() {
   const nav = document.getElementById("sidebar");
   nav.innerHTML = `
@@ -549,7 +859,7 @@ function renderSidebar() {
       ${i === 1 ? '<div class="nav-divider"></div>' : ""}
       <div class="nav-stub${active === m.id ? " active" : ""}" style="--dot-color:${m.color || "var(--text-dim)"}" onclick="setActive('${m.id}')">
         ${m.color ? `<span class="dot"></span>` : ""}
-        <span>${m.label}</span>
+        <span>${t("nav." + m.id)}</span>
       </div>
     `).join("")}
   `;
@@ -558,23 +868,24 @@ function renderSidebar() {
 function setActive(id) {
   active = id;
   renderSidebar();
-  document.getElementById("topbarTitle").textContent = MODULES.find(m => m.id === id).label;
+  document.getElementById("topbarTitle").textContent = t("nav." + id);
   document.querySelectorAll(".module-panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
 }
 
+/* ============================== overview ============================== */
 function renderOverview() {
   const stats = [
-    { id: "hiring", label: "Open applications", value: DATA.hiring.filter(h => h.stage !== "Offer sent").length, sub: `${DATA.hiring.length} total in pipeline` },
-    { id: "training", label: "Courses in progress", value: DATA.training.courses.filter(t => t.completed < t.assigned).length, sub: `${DATA.training.courses.length} courses · ${DATA.training.documents.length} documents` },
-    { id: "scheduling", label: "Open shifts", value: DATA.scheduling.shifts.filter(s => s.status === "open").length, sub: `AI flagged Saturday as short-staffed` },
-    { id: "payroll", label: "Sales this week", value: "$" + DATA.payroll.weekSales.toLocaleString(), sub: `${DATA.payroll.pnl.laborCostPct}% labor cost` },
-    { id: "comms", label: "Unread messages", value: 2, sub: `Ask the AI agent anything` },
+    { id: "hiring", label: t("overview.openApplications"), value: DATA.hiring.filter(h => h.stageKey !== "offer").length, sub: t("overview.totalPipeline", DATA.hiring.length) },
+    { id: "training", label: t("overview.coursesInProgress"), value: DATA.training.courses.filter(c => c.completed < c.assigned).length, sub: t("overview.coursesDocs", DATA.training.courses.length, DATA.training.documents.length) },
+    { id: "scheduling", label: t("overview.openShifts"), value: DATA.scheduling.shifts.filter(s => s.status === "open").length, sub: t("overview.aiFlag") },
+    { id: "payroll", label: t("overview.salesWeek"), value: "$" + DATA.payroll.weekSales.toLocaleString(), sub: t("overview.laborPct", DATA.payroll.pnl.laborCostPct) },
+    { id: "comms", label: t("overview.unread"), value: 2, sub: t("overview.askAnything") },
   ];
   return `
     <div class="module-header">
-      <div class="eyebrow">Overview</div>
-      <h2>This week, at a glance</h2>
-      <p>Every module below feeds this dashboard — tap a card to open it.</p>
+      <div class="eyebrow">${t("overview.eyebrow")}</div>
+      <h2>${t("overview.h2")}</h2>
+      <p>${t("overview.p")}</p>
     </div>
     <div class="overview-grid">
       ${stats.map(s => `
@@ -589,132 +900,135 @@ function renderOverview() {
   `;
 }
 
+/* ============================== hiring ============================== */
 function renderHiring() {
   return `
     <div class="module-header" style="--accent:var(--hiring)">
-      <div class="eyebrow">Hiring</div>
-      <h2>Applicant pipeline</h2>
-      <p>Post an opening, let the system screen resumes against the role, then schedule interviews without leaving the pipeline.</p>
+      <div class="eyebrow">${t("hiring.eyebrow")}</div>
+      <h2>${t("hiring.h2")}</h2>
+      <p>${t("hiring.p")}</p>
     </div>
-    <button class="primary-action" style="--accent:var(--hiring);margin-bottom:18px" onclick="alert('In the full product, this opens a job-post form.')">Post a job opening</button>
+    <button class="primary-action" style="--accent:var(--hiring);margin-bottom:18px" onclick="alert(t('alerts.postJob'))">${t("hiring.postJob")}</button>
     ${DATA.hiring.map(c => `
       <div class="stub">
-        <div class="tag" style="--accent:var(--hiring)">${c.stage}</div>
+        <div class="tag" style="--accent:var(--hiring)">${t("hiring.stage." + c.stageKey)}</div>
         <h3>${c.name}</h3>
-        <div class="meta">Applying for ${c.role} · applied ${c.applied}</div>
-        <div class="body-text">${c.note}</div>
-        ${c.aiScore ? `<div class="body-text" style="margin-top:8px"><strong>Screening match: ${c.aiScore}/100</strong> — resume and experience checked against this role's requirements.</div>` : ""}
-        ${c.interview ? `<div class="body-text" style="margin-top:4px">Interview: ${c.interview}</div>` : ""}
+        <div class="meta">${t("hiring.applyingFor", roleLabel(c.roleKey), tf(c.applied))}</div>
+        <div class="body-text">${tf(c.note)}</div>
+        ${c.aiScore ? `<div class="body-text" style="margin-top:8px"><strong>${t("hiring.screeningMatch", c.aiScore)}</strong></div>` : ""}
+        ${c.interview ? `<div class="body-text" style="margin-top:4px">${t("hiring.interviewLabel", tf(c.interview))}</div>` : ""}
         <div class="stub-actions">
-          ${c.interview ? `<button class="mini btn-outline" onclick="alert('Would open the interview details.')">View interview</button>` : `<button class="mini btn-solid" style="--accent:var(--hiring)" onclick="alert('Would open a scheduling picker synced to your calendar.')">Schedule interview</button>`}
-          <button class="mini btn-outline" onclick="alert('Would open their full application.')">View application</button>
+          ${c.interview ? `<button class="mini btn-outline" onclick="alert(t('alerts.viewInterview'))">${t("hiring.viewInterview")}</button>` : `<button class="mini btn-solid" style="--accent:var(--hiring)" onclick="alert(t('alerts.scheduleInterview'))">${t("hiring.scheduleInterview")}</button>`}
+          <button class="mini btn-outline" onclick="alert(t('alerts.viewApp'))">${t("hiring.viewApplication")}</button>
         </div>
       </div>
     `).join("")}
   `;
 }
 
+/* ============================== training ============================== */
 function renderTraining() {
   return `
     <div class="module-header" style="--accent:var(--training)">
-      <div class="eyebrow">Training</div>
-      <h2>Onboarding & courses</h2>
-      <p>Video courses, onboarding manuals, and contracts to sign — all in one place, with completion tracked per person.</p>
+      <div class="eyebrow">${t("training.eyebrow")}</div>
+      <h2>${t("training.h2")}</h2>
+      <p>${t("training.p")}</p>
     </div>
-    <button class="primary-action" style="--accent:var(--training);margin-bottom:18px" onclick="alert('In the full product, this opens a course builder.')">Create a course</button>
-    ${DATA.training.courses.map(t => `
+    <button class="primary-action" style="--accent:var(--training);margin-bottom:18px" onclick="alert(t('alerts.createCourse'))">${t("training.createCourse")}</button>
+    ${DATA.training.courses.map(c => `
       <div class="stub">
-        <div class="tag" style="--accent:var(--training)">${t.completed}/${t.assigned} done</div>
-        <h3 style="display:flex;align-items:center;gap:10px"><span class="video-thumb" style="--accent:var(--training)"></span>${t.title}</h3>
-        <div class="meta">${t.minutes} min · assigned to ${t.assigned} staff</div>
-        <div class="progress-track"><div class="progress-fill" style="--accent:var(--training);width:${Math.round((t.completed/t.assigned)*100)}%"></div></div>
+        <div class="tag" style="--accent:var(--training)">${t("training.doneCount", c.completed, c.assigned)}</div>
+        <h3 style="display:flex;align-items:center;gap:10px"><span class="video-thumb" style="--accent:var(--training)"></span>${tf(c.title)}</h3>
+        <div class="meta">${t("training.minAssigned", c.minutes, c.assigned)}</div>
+        <div class="progress-track"><div class="progress-fill" style="--accent:var(--training);width:${Math.round((c.completed/c.assigned)*100)}%"></div></div>
       </div>
     `).join("")}
-    <h3 style="margin:24px 0 12px;font-size:15px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em">Manuals & contracts</h3>
+    <h3 style="margin:24px 0 12px;font-size:15px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.04em">${t("training.manualsHeader")}</h3>
     ${DATA.training.documents.map(d => `
       <div class="stub">
-        <div class="tag" style="--accent:var(--training)">${d.type}</div>
-        <h3>${d.title}</h3>
-        <div class="meta">${d.status}</div>
+        <div class="tag" style="--accent:var(--training)">${typeLabel(d.typeKey)}</div>
+        <h3>${tf(d.title)}</h3>
+        <div class="meta">${tf(d.status)}</div>
       </div>
     `).join("")}
   `;
 }
 
+/* ============================== scheduling ============================== */
 function renderScheduling() {
+  const f = DATA.scheduling.forecast;
   return `
     <div class="module-header" style="--accent:var(--scheduling)">
-      <div class="eyebrow">Scheduling</div>
-      <h2>Shifts & staffing</h2>
-      <p>An agent watches your sales history and nearby events to flag staffing gaps before they happen — and when someone doesn't show, posting a replacement here texts every matching staff member in seconds.</p>
+      <div class="eyebrow">${t("scheduling.eyebrow")}</div>
+      <h2>${t("scheduling.h2")}</h2>
+      <p>${t("scheduling.p")}</p>
     </div>
     <div class="stub" style="border-left:3px solid var(--scheduling)">
-      <div class="tag" style="--accent:var(--scheduling)">AI forecast</div>
-      <h3>${DATA.scheduling.forecast.headline}</h3>
-      <div class="body-text">${DATA.scheduling.forecast.detail}</div>
-      <div class="body-text" style="margin-top:8px"><strong>Suggestion:</strong> ${DATA.scheduling.forecast.suggestion}</div>
+      <div class="tag" style="--accent:var(--scheduling)">${t("scheduling.aiForecastTag")}</div>
+      <h3>${tf(f.headline)}</h3>
+      <div class="body-text">${tf(f.detail)}</div>
+      <div class="body-text" style="margin-top:8px"><strong>${t("scheduling.suggestionLabel")}</strong> ${tf(f.suggestion)}</div>
       <div class="stub-actions">
-        <button class="mini btn-solid" style="--accent:var(--scheduling)" onclick="alert('Would pre-fill an open shift matching this suggestion.')">Add the shift</button>
+        <button class="mini btn-solid" style="--accent:var(--scheduling)" onclick="alert(t('alerts.addShift'))">${t("scheduling.addShift")}</button>
       </div>
     </div>
-    <button class="primary-action" style="--accent:var(--scheduling);margin:6px 0 18px" onclick="alert('This is the live product you already have — posting here sends real SMS.')">Post an open shift</button>
+    <button class="primary-action" style="--accent:var(--scheduling);margin:6px 0 18px" onclick="alert(t('alerts.postShiftLive'))">${t("scheduling.postShift")}</button>
     ${DATA.scheduling.shifts.map(s => `
       <div class="stub">
-        <div class="tag" style="--accent:${s.status === 'open' ? 'var(--scheduling)' : 'var(--payroll)'}">${s.status === 'open' ? 'Open' : 'Filled'}</div>
-        <h3>${s.role}</h3>
-        <div class="meta">${s.time}</div>
-        ${s.note ? `<div class="body-text">${s.note}</div>` : ""}
-        ${s.status === 'open' ? `<div class="body-text" style="margin-top:8px;opacity:0.7">${s.responders} staff responded</div>` : ""}
+        <div class="tag" style="--accent:${s.status === 'open' ? 'var(--scheduling)' : 'var(--payroll)'}">${s.status === 'open' ? t("scheduling.open") : t("scheduling.filled")}</div>
+        <h3>${roleLabel(s.roleKey)}</h3>
+        <div class="meta">${tf(s.time)}</div>
+        ${s.note ? `<div class="body-text">${tf(s.note)}</div>` : ""}
+        ${s.status === 'open' ? `<div class="body-text" style="margin-top:8px;opacity:0.7">${t("scheduling.respondedCount", s.responders)}</div>` : ""}
       </div>
     `).join("")}
   `;
 }
 
+/* ============================== payroll ============================== */
 function renderPayroll() {
   const p = DATA.payroll;
-  const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const max = Math.max(...p.weeklySalesTrend);
   return `
     <div class="module-header" style="--accent:var(--payroll)">
-      <div class="eyebrow">Payroll & Sales</div>
-      <h2>This week's numbers</h2>
-      <p>Real-time labor, food, and beverage cost against sales — plus payroll that's already forecasted for next period.</p>
+      <div class="eyebrow">${t("payroll.eyebrow")}</div>
+      <h2>${t("payroll.h2")}</h2>
+      <p>${t("payroll.p")}</p>
     </div>
     <div class="stub">
-      <div class="tag" style="--accent:var(--payroll)">Live</div>
-      <h3>Sales this week</h3>
-      <div class="meta">$${p.weekSales.toLocaleString()} total · ${p.pnl.laborCostPct}% labor cost</div>
+      <div class="tag" style="--accent:var(--payroll)">${t("payroll.liveTag")}</div>
+      <h3>${t("payroll.salesLine", p.weekSales.toLocaleString(), p.pnl.laborCostPct)}</h3>
       <div class="bar-chart">
         ${p.weeklySalesTrend.map((v,i) => `
           <div class="bar-col">
             <div class="bar" style="--accent:var(--payroll);height:${Math.round((v/max)*100)}%"></div>
-            <div class="bar-label">${days[i]}</div>
+            <div class="bar-label">${t("days")[i]}</div>
           </div>
         `).join("")}
       </div>
     </div>
     <div class="stub">
-      <div class="tag" style="--accent:var(--payroll)">P&L snapshot</div>
-      <h3>Cost breakdown</h3>
-      <div class="meta">Percent of this week's sales</div>
-      <div class="pay-row"><span>Food cost</span><span class="num">${p.pnl.foodCostPct}%</span></div>
-      <div class="pay-row"><span>Beverage cost</span><span class="num">${p.pnl.bevCostPct}%</span></div>
-      <div class="pay-row"><span>Labor cost</span><span class="num">${p.pnl.laborCostPct}%</span></div>
-      <div class="pay-row"><span><strong>Net margin</strong></span><span class="num"><strong>${p.pnl.netMarginPct}%</strong></span></div>
+      <div class="tag" style="--accent:var(--payroll)">${t("payroll.pnlTag")}</div>
+      <h3>${t("payroll.costBreakdown")}</h3>
+      <div class="meta">${t("payroll.pctOfSales")}</div>
+      <div class="pay-row"><span>${t("payroll.foodCost")}</span><span class="num">${p.pnl.foodCostPct}%</span></div>
+      <div class="pay-row"><span>${t("payroll.bevCost")}</span><span class="num">${p.pnl.bevCostPct}%</span></div>
+      <div class="pay-row"><span>${t("payroll.laborCost")}</span><span class="num">${p.pnl.laborCostPct}%</span></div>
+      <div class="pay-row"><span><strong>${t("payroll.netMargin")}</strong></span><span class="num"><strong>${p.pnl.netMarginPct}%</strong></span></div>
     </div>
     <div class="stub">
-      <div class="tag" style="--accent:var(--payroll)">Forecast</div>
-      <h3>Next pay period estimate</h3>
-      <div class="meta">${p.forecast.note}</div>
+      <div class="tag" style="--accent:var(--payroll)">${t("payroll.forecastTag")}</div>
+      <h3>${t("payroll.nextPeriod")}</h3>
+      <div class="meta">${tf(p.forecast.note)}</div>
       <div class="body-text num" style="font-size:22px;margin-top:6px">$${p.forecast.nextPeriodEstimate.toLocaleString()}</div>
     </div>
     <div class="stub">
-      <div class="tag" style="--accent:var(--payroll)">Hours</div>
-      <h3>Staff pay this week</h3>
-      <div class="meta">Based on logged hours × hourly rate</div>
+      <div class="tag" style="--accent:var(--payroll)">${t("payroll.hoursTag")}</div>
+      <h3>${t("payroll.staffPayHeader")}</h3>
+      <div class="meta">${t("payroll.hoursBasis")}</div>
       ${p.staffPay.map(s => `
         <div class="pay-row">
-          <span>${s.name} <span style="opacity:0.6">· ${s.role}</span></span>
+          <span>${s.name} <span style="opacity:0.6">· ${roleLabel(s.roleKey)}</span></span>
           <span class="num">${s.hours}h × $${s.rate} = $${(s.hours*s.rate).toLocaleString()}</span>
         </div>
       `).join("")}
@@ -722,42 +1036,43 @@ function renderPayroll() {
   `;
 }
 
+/* ============================== communications ============================== */
 function renderComms() {
   return `
     <div class="module-header" style="--accent:var(--comms)">
-      <div class="eyebrow">Communications</div>
-      <h2>Team messages & AI agent</h2>
-      <p>One inbox for your team, plus an agent that can see across hiring, training, scheduling, and payroll to actually answer questions — not just relay messages.</p>
+      <div class="eyebrow">${t("comms.eyebrow")}</div>
+      <h2>${t("comms.h2")}</h2>
+      <p>${t("comms.p")}</p>
     </div>
     <div class="stub" style="padding-bottom:14px">
-      <div class="tag" style="--accent:var(--comms)">AI agent</div>
-      <h3>Ask about your restaurant</h3>
+      <div class="tag" style="--accent:var(--comms)">${t("comms.aiTag")}</div>
+      <h3>${t("comms.askHeader")}</h3>
       <div id="aiThreadWrap" style="margin-top:14px">${renderAiThread()}</div>
       <div style="display:flex;gap:8px;margin-top:6px">
-        <input type="text" id="aiInput" placeholder="e.g. Which shift is understaffed this week?" onkeydown="if(event.key==='Enter') askAgent()" />
-        <button class="mini btn-solid" style="--accent:var(--comms);white-space:nowrap;padding:0 14px" onclick="askAgent()">Ask</button>
+        <input type="text" id="aiInput" placeholder="${t("comms.inputPlaceholder")}" onkeydown="if(event.key==='Enter') askAgent()" />
+        <button class="mini btn-solid" style="--accent:var(--comms);white-space:nowrap;padding:0 14px" onclick="askAgent()">${t("comms.ask")}</button>
       </div>
     </div>
     <div class="stub" style="padding-bottom:6px">
-      <div class="tag" style="--accent:var(--comms)">Thread</div>
-      <h3>Shift swap — this week</h3>
+      <div class="tag" style="--accent:var(--comms)">${t("comms.threadTag")}</div>
+      <h3>${t("comms.threadHeader")}</h3>
       <div style="margin-top:14px">
         ${DATA.comms.thread.map(m => `
           <div class="thread-msg" style="${m.mine ? 'flex-direction:row-reverse' : ''}">
-            <div class="avatar-dot">${m.name.split(" ").map(p=>p[0]).join("").slice(0,2)}</div>
+            <div class="avatar-dot">${(m.mine ? t("comms.you") : m.name).split(" ").map(p=>p[0]).join("").slice(0,2)}</div>
             <div>
-              <div class="thread-name" style="${m.mine ? 'text-align:right' : ''}">${m.name} · ${m.time}</div>
-              <div class="thread-bubble" style="${m.mine ? `background:var(--comms);color:#fff;border-color:var(--comms)` : ''}">${m.text}</div>
+              <div class="thread-name" style="${m.mine ? 'text-align:right' : ''}">${m.mine ? t("comms.you") : m.name} · ${m.time}</div>
+              <div class="thread-bubble" style="${m.mine ? `background:var(--comms);color:#fff;border-color:var(--comms)` : ''}">${tf(m.text)}</div>
             </div>
           </div>
         `).join("")}
       </div>
     </div>
     <div class="stub">
-      <div class="tag" style="--accent:var(--comms)">New</div>
-      <h3>Broadcast an announcement</h3>
-      <textarea rows="3" placeholder="e.g. Kitchen closes early this Sunday for inventory — plan accordingly." style="margin-top:10px"></textarea>
-      <button class="primary-action" style="--accent:var(--comms);margin-top:12px" onclick="alert('Would text every staff member this announcement.')">Send to all staff</button>
+      <div class="tag" style="--accent:var(--comms)">${t("comms.newTag")}</div>
+      <h3>${t("comms.broadcastHeader")}</h3>
+      <textarea rows="3" placeholder="${t("comms.broadcastPlaceholder")}" style="margin-top:10px"></textarea>
+      <button class="primary-action" style="--accent:var(--comms);margin-top:12px" onclick="alert(t('alerts.broadcast'))">${t("comms.sendAll")}</button>
     </div>
   `;
 }
@@ -765,9 +1080,9 @@ function renderComms() {
 function renderAiThread() {
   return DATA.comms.aiThread.map(m => `
     <div class="thread-msg" style="${m.role === 'user' ? 'flex-direction:row-reverse' : ''}">
-      <div class="avatar-dot" style="${m.role === 'ai' ? 'background:var(--comms);color:#fff;border-color:var(--comms)' : ''}">${m.role === 'ai' ? 'AI' : 'You'}</div>
+      <div class="avatar-dot" style="${m.role === 'ai' ? 'background:var(--comms);color:#fff;border-color:var(--comms)' : ''}">${m.role === 'ai' ? 'AI' : t("comms.you").slice(0,2)}</div>
       <div>
-        <div class="thread-bubble" style="${m.role === 'user' ? 'background:var(--comms);color:#fff;border-color:var(--comms)' : ''}">${m.text}</div>
+        <div class="thread-bubble" style="${m.role === 'user' ? 'background:var(--comms);color:#fff;border-color:var(--comms)' : ''}">${tf(m.text)}</div>
       </div>
     </div>
   `).join("");
@@ -775,35 +1090,35 @@ function renderAiThread() {
 
 function generateAiResponse(q) {
   const lower = q.toLowerCase();
-  if (/cost|margin|labor|food|beverage|profit/.test(lower)) {
-    const p = DATA.payroll.pnl;
-    return `This week: food cost ${p.foodCostPct}%, beverage cost ${p.bevCostPct}%, labor cost ${p.laborCostPct}% — net margin around ${p.netMarginPct}%. Labor's the largest lever right now.`;
+  const costWords = /cost|margin|labor|food|beverage|profit|coût|marge|main-d'œuvre|main d'oeuvre|nourriture|boisson|costo|margen|mano de obra|comida|bebida|beneficio/;
+  const shiftWords = /shift|staff|schedul|cover|understaff|quart|personnel|horaire|manque|remplacement|turno|horario|cobertura|falta/;
+  const trainWords = /train|course|onboard|manual|contract|formation|cours|intégration|contrat|capacitaci|curso|incorporaci|contrato/;
+  const hireWords = /hir|candidate|applicant|interview|posting|embauche|candidat|entrevue|affichage|contrataci|candidato|entrevista|publicaci/;
+
+  if (costWords.test(lower)) return t("comms.respCost", DATA.payroll.pnl);
+  if (shiftWords.test(lower)) return tf(DATA.scheduling.forecast.detail) + " " + tf(DATA.scheduling.forecast.suggestion);
+  if (trainWords.test(lower)) {
+    const behind = DATA.training.courses.filter(c => c.completed < c.assigned).map(c => tf(c.title)).join(", ");
+    return (behind ? t("comms.respTrainingBehind", behind) : t("comms.respTrainingCaughtUp")) + " " + t("comms.respTrainingContract");
   }
-  if (/shift|staff|schedul|cover|understaff/.test(lower)) {
-    return DATA.scheduling.forecast.detail + " " + DATA.scheduling.forecast.suggestion;
+  if (hireWords.test(lower)) {
+    const open = DATA.hiring.filter(h => h.stageKey !== "offer").length;
+    return t("comms.respHiring", open);
   }
-  if (/train|course|onboard|manual|contract/.test(lower)) {
-    const c = DATA.training.courses;
-    const behind = c.filter(t => t.completed < t.assigned).map(t => t.title).join(", ");
-    return `${behind ? `Still catching up on: ${behind}.` : "Everyone's caught up on assigned courses."} One contract is still waiting on a signature in Training.`;
-  }
-  if (/hir|candidate|applicant|interview|posting/.test(lower)) {
-    const open = DATA.hiring.filter(h => h.stage !== "Offer sent").length;
-    return `${open} candidates are still active in the pipeline. Dana Okafor's offer is out for Host, and Priya Nandan has an interview scheduled for Line Cook.`;
-  }
-  return "I can pull from hiring, training, scheduling, and payroll to answer that — try asking about staffing, labor cost, or who's behind on training.";
+  return t("comms.respFallback");
 }
 
 function askAgent() {
   const input = document.getElementById("aiInput");
   const question = input.value.trim();
   if (!question) return;
-  DATA.comms.aiThread.push({ role: "user", text: question });
-  DATA.comms.aiThread.push({ role: "ai", text: generateAiResponse(question) });
+  DATA.comms.aiThread.push({ role: "user", text: { en: question, fr: question, es: question } });
+  DATA.comms.aiThread.push({ role: "ai", text: { en: generateAiResponse(question), fr: generateAiResponse(question), es: generateAiResponse(question) } });
   input.value = "";
   document.getElementById("aiThreadWrap").innerHTML = renderAiThread();
 }
 
+/* ============================== render all / bootstrap ============================== */
 function renderAll() {
   document.getElementById("content").innerHTML = `
     <div class="module-panel active" id="panel-overview">${renderOverview()}</div>
@@ -813,6 +1128,7 @@ function renderAll() {
     <div class="module-panel" id="panel-payroll">${renderPayroll()}</div>
     <div class="module-panel" id="panel-comms">${renderComms()}</div>
   `;
+  document.querySelectorAll(".module-panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + active));
 }
 
 function renderPortfolio() {
@@ -822,20 +1138,20 @@ function renderPortfolio() {
 
   document.getElementById("portfolioContent").innerHTML = `
     <div class="portfolio-totals">
-      <div class="total-item"><span class="num">$${totalSales.toLocaleString()}</span><span class="label">Combined sales this week</span></div>
-      <div class="total-item"><span class="num">${totalOpenShifts}</span><span class="label">Open shifts across locations</span></div>
-      <div class="total-item"><span class="num">${needingAttention}</span><span class="label">Locations needing attention</span></div>
+      <div class="total-item"><span class="num">$${totalSales.toLocaleString()}</span><span class="label">${t("portfolio.totalSales")}</span></div>
+      <div class="total-item"><span class="num">${totalOpenShifts}</span><span class="label">${t("portfolio.totalOpen")}</span></div>
+      <div class="total-item"><span class="num">${needingAttention}</span><span class="label">${t("portfolio.totalAttention")}</span></div>
     </div>
     <div class="restaurant-grid">
       ${RESTAURANTS.map(r => `
         <div class="restaurant-card" onclick="enterRestaurant('${r.id}')">
-          <div class="status-tag ${r.status}">${r.status === "ok" ? "On track" : "Attention"}</div>
+          <div class="status-tag ${r.status}">${r.status === "ok" ? t("portfolio.statusOk") : t("portfolio.statusAttention")}</div>
           <h3>${r.name}</h3>
-          <div class="city">${r.city}</div>
-          <div class="stat-row"><span>Sales this week</span><span class="num">$${r.weekSales.toLocaleString()}</span></div>
-          <div class="stat-row"><span>Labor cost</span><span class="num">${r.laborPct}%</span></div>
-          <div class="stat-row"><span>Open shifts</span><span class="num">${r.openShifts}</span></div>
-          <div class="note">${r.note}</div>
+          <div class="city">${tf(r.city)}</div>
+          <div class="stat-row"><span>${t("portfolio.salesThisWeek")}</span><span class="num">$${r.weekSales.toLocaleString()}</span></div>
+          <div class="stat-row"><span>${t("portfolio.laborCost")}</span><span class="num">${r.laborPct}%</span></div>
+          <div class="stat-row"><span>${t("portfolio.openShifts")}</span><span class="num">${r.openShifts}</span></div>
+          <div class="note">${tf(r.note)}</div>
         </div>
       `).join("")}
     </div>
@@ -855,6 +1171,8 @@ function enterRestaurant(id) {
   setActive("overview");
 }
 
+renderLangSwitch("langSwitchPortfolio");
+renderLangSwitch("langSwitchApp");
 renderPortfolio();
 renderSidebar();
 renderAll();
